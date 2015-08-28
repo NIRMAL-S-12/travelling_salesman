@@ -172,7 +172,6 @@ void Genetic_Algo::anneal() {
 			srv.pop_back();
 		}
 	}
-	std::cout << srv.size() << std::endl;
 	sr = srv[0];
 	sr.print_route();
 	std::cout << std::endl;
@@ -182,56 +181,16 @@ void Genetic_Algo::anneal() {
 		for (int j = 0; j < 1000; j++) {
 
 			// Selects function by percentages
-			if (change_chance > (double) rand() / (RAND_MAX)) {
-				std::cout << "change_route" << std::endl;
-				tmp_sr.print_route();
+			if (change_chance > (double) rand() / (RAND_MAX))
 				tmp_sr = change_route(sr, i);
-				if (dup_check(tmp_sr)) {
-					std::cout << "change_route dup" << std::endl;
-					tmp_sr.print_route();
-				}
-				else if (contains_check(tmp_sr)) {
-					std::cout << "change_route cont" << std::endl;
-					tmp_sr.print_route();
-				}
-			}
 			else {
-				if (new_chance > (double) rand() / (RAND_MAX)) {
-					std::cout << "random_path" << std::endl;
-					tmp_sr.print_route();
+				if (new_chance > (double) rand() / (RAND_MAX))
 					tmp_sr = random_path();
-					if (dup_check(tmp_sr)) {
-						std::cout << "random_path dup" << std::endl;
-						tmp_sr.print_route();
-					}
-					else if (contains_check(tmp_sr)) {
-						std::cout << "random_path cont" << std::endl;
-						tmp_sr.print_route();
-					}
-				}
 				else {
-					if (add_chance < (double) rand() / (RAND_MAX)) {
-						std::cout << "add_city" << std::endl;
-						tmp_sr.print_route();
+					if (add_chance < (double) rand() / (RAND_MAX))
 						tmp_sr = add_city(sr);
-						if (dup_check(tmp_sr))
-							std::cout << "add_city dup" << std::endl;
-						else if (contains_check(tmp_sr)) {
-							std::cout << "add_city cont" << std::endl;
-							tmp_sr.print_route();
-						}
-					}
-					else {
-						std::cout << "remove_city" << std::endl;
-						tmp_sr.print_route();
+					else
 						tmp_sr = remove_city(sr);
-						if (dup_check(tmp_sr))
-							std::cout << "remove_city dup" << std::endl;
-						else if (contains_check(tmp_sr)) {
-							std::cout << "remove_city cont" << std::endl;
-							tmp_sr.print_route();
-						}
-					}
 				}
 			}
 			
@@ -240,12 +199,6 @@ void Genetic_Algo::anneal() {
 				sr = tmp_sr;
 		}
 	}
-
-	/*
-	for(int i = 0; i < 5; i++) {
-		print_route(srv[i]);
-		std::cout << std::endl;
-	}*/
 
 	sr.print_route();
 }
@@ -447,6 +400,7 @@ inline sales_route Genetic_Algo::change_route(sales_route sr, int change_amount)
 
 	// Adds new random city in their place
 	for (it = change_citys.begin(); it != change_citys.end(); it++) {
+
 		while (true) {
 			new_c = random_city(sr);
 			if (new_c != HQ) {
@@ -455,8 +409,6 @@ inline sales_route Genetic_Algo::change_route(sales_route sr, int change_amount)
 				break;
 			}
 		}
-		//else
-		//	sr.citys_visted.insert(sr.route[*it]);
 	}
 
 	// Recalculates profit
