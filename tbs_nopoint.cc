@@ -7,14 +7,17 @@
 #include <time.h>
 #include <unordered_set>
 #include <set>
+#include <ctime>
+
+
+#include <pthread.h>
 
 // Number of citys, 10% of number of citys,...
 //... blimp cost per mile, blimp factor of decline.
 int NC, TNC;
 double BCMP, BFOD;
 
-int POP_SIZE = 10;
-double change_chance = 0.95, new_chance = 0.01, add_chance = 0.5;
+double change_chance = 0.85, add_chance = 0.7;
 
 // City structure
 struct city {
@@ -41,6 +44,12 @@ struct city {
 
 	bool operator != (const city &rhs) const {
 		return x != rhs.x || y != rhs.y || blimp_p != rhs.blimp_p;
+	}
+
+	// Profit distance calculation
+	double profit_distance(city &c) {
+		double dist = sqrt(abs(x - c.x) + abs(y - c.y));
+		return blimp_p - dist * (BCMP + 1);
 	}
 };
 
@@ -113,98 +122,103 @@ struct sales_route {
 	// Print out the route of the sales_route
 	void print_route() {
 		int blimp_amount_index = 0;
-		for (city cp : route) {
-			std::cout << cp.x << " " << cp.y;
+		for (int i = 1; i < route.size(); i++) {
+			std::cout << route[i].x << " " << route[i].y;
 
-			if (cp == HQ)
+			if (route[i - 1] == HQ)
 				std::cout << " " << blimp_amounts[blimp_amount_index++];
 
-			std::cout << '\n';
+			std::cout << std::endl;
 		}
-		std::cout << profit << '\n';
+
+		std::cout << profit << std::endl;
 	}
 };
 
-class Genetic_Algo {
+class Simulated_anneal {
 	public:
 		std::vector<city> citys;
 		std::vector<sales_route> pop;
 
-		void anneal();
+		void run();
 
 	private:
+		sales_route create_init_route(std::clock_t&);
+		void anneal(sales_route&, double);
+
 		void read_input();
+
 		sales_route random_path();
 		inline city random_city(sales_route&);
+		inline city closest_profit_city(sales_route&, city&);
 
 		inline sales_route add_city(sales_route sr);
 		inline sales_route remove_city(sales_route sr);
 		inline sales_route change_route(sales_route sr, int);
-
-		// Debugging
-		bool dup_check(sales_route sr);
-		bool contains_check(sales_route sr);
 };
 
 // Main loop of the algorithm
-void Genetic_Algo::anneal() {
+void Simulated_anneal::run() {
+	// Timer variables
+    std::clock_t start = std::clock();
+    double duration, time_allowed = 1.95;
+
 	// Random seed
 	srand(time(NULL));
 
 	read_input();
 
-	sales_route sr, tmp_sr;
-	std::vector<sales_route> srv;
-	// Test //
-	for (int j = 0; j < 10; j++) {
 
-		for (int i = 0; i < POP_SIZE; i++) {
-			sales_route sr = random_path();
-			if (sr.citys_visted.size() > 0)
-				srv.push_back(sr);
-			else
-				i--;
-		}
+	sales_route sr = create_init_route(start);
 
-		std::sort(srv.begin(), srv.end());
+	duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+	while ((start  / (double) CLOCKS_PER_SEC) + duration < time_allowed) {
+		anneal(sr, ((start  / (double) CLOCKS_PER_SEC) + duration) / time_allowed);
 
-		for (int i = POP_SIZE / 2; i < POP_SIZE; i++) {
-			srv.pop_back();
-		}
-	}
-	sr = srv[0];
-	sr.print_route();
-	std::cout << std::endl;
-	sr = remove_city(sr);
-
-	for (int i = 5; i > 0; i--) {
-		for (int j = 0; j < 1000; j++) {
-
-			// Selects function by percentages
-			if (change_chance > (double) rand() / (RAND_MAX))
-				tmp_sr = change_route(sr, i);
-			else {
-				if (new_chance > (double) rand() / (RAND_MAX))
-					tmp_sr = random_path();
-				else {
-					if (add_chance < (double) rand() / (RAND_MAX))
-						tmp_sr = add_city(sr);
-					else
-						tmp_sr = remove_city(sr);
-				}
-			}
-			
-			// Check for an increase in profit
-			if (tmp_sr.profit > sr.profit) 
-				sr = tmp_sr;
-		}
+		duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
 	}
 
 	sr.print_route();
 }
 
+// Creates a random path within and returns after the allowed time has elasped
+sales_route Simulated_anneal::create_init_route(std::clock_t &start) {
+	double duration, time_allowed = 0.2;
+	sales_route sr = { 0.0 }, tmp_sr;
+
+	duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+	while ((start  / (double) CLOCKS_PER_SEC) + duration < time_allowed) {
+		tmp_sr = random_path();
+		if (tmp_sr.profit > sr.profit)
+			sr = tmp_sr;
+
+		duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+	}
+
+	return sr;
+}
+
+// Anneals the algorithm
+void Simulated_anneal::anneal(sales_route &sr, double change_percent) {
+	sales_route tmp_sr;
+
+	// Selects function by percentages
+	if (change_chance > (double) rand() / (RAND_MAX))
+		tmp_sr = change_route(sr, ceil(sr.route.size() * change_percent));
+	else {
+		if (add_chance < (double) rand() / (RAND_MAX))
+			tmp_sr = add_city(sr);
+		else
+			tmp_sr = remove_city(sr);
+	}
+
+	// Check for an increase in profit
+	if (tmp_sr.profit > sr.profit) 
+		sr = tmp_sr;
+}
+
 // Reads all citys from stdin 
-void Genetic_Algo::read_input() {
+void Simulated_anneal::read_input() {
 	std::cin >> NC >> BCMP >> BFOD;
 
 	TNC = NC / 10;
@@ -219,7 +233,7 @@ void Genetic_Algo::read_input() {
 }
 
 // Returns a random city not contained in the sales_route already
-inline city Genetic_Algo::random_city(sales_route& sr) {
+inline city Simulated_anneal::random_city(sales_route& sr) {
 	city ran_cp;
 
 	// Attemps to find a random city 25 times
@@ -235,8 +249,23 @@ inline city Genetic_Algo::random_city(sales_route& sr) {
 	return HQ;
 }
 
+// Selects the best random city by profit distance from a given city
+inline city Simulated_anneal::closest_profit_city(sales_route &sr, city &c) {
+	// Gets 3 random citys and their profit distance from the passed city
+	city c1 = random_city(sr), c2 = random_city(sr), c3 = random_city(sr);
+	double cd1 = c1.profit_distance(c), cd2 = c2.profit_distance(c), cd3 = c3.profit_distance(c);
+
+	// Returns the city with the largest profit distance
+	if (cd1 > cd2 && cd1 > cd3)
+		return c1;
+	else if (cd2 > cd3)
+		return c2;
+
+	return c3;
+}
+
 // Creates a random so path of travel for the salesman and adds to pop
-sales_route Genetic_Algo::random_path() {
+sales_route Simulated_anneal::random_path() {
 	sales_route sr = { 0.0, std::vector<city>(), std::unordered_set<city>(), std::vector<int>() };
 	city ran_city, last_city;
 	double city_dist, tmp_blimp_amount, tmp_profit, tot_sold = 0.0, tmp_blimp_rate;
@@ -258,8 +287,11 @@ sales_route Genetic_Algo::random_path() {
 		last_city = HQ;
 
 		while (tmp_blimp_amount) {
-			// Gets and checks random city
-			ran_city = random_city(sr);
+			// Gets and checks random city or best of three random city
+			if (last_city == HQ)
+				ran_city = random_city(sr);
+			else
+				ran_city = closest_profit_city(sr, last_city);
 			if (ran_city == HQ)
 				break;
 
@@ -310,16 +342,22 @@ sales_route Genetic_Algo::random_path() {
 }
 
 // Attemps to add new the sales route
-inline sales_route Genetic_Algo::add_city(sales_route sr) {
+inline sales_route Simulated_anneal::add_city(sales_route sr) {
 	if (sr.citys_visted.size() == NC)
 		return sr;
 
 	// Gets new random city and adds it to the route at a random index
-	city new_c = random_city(sr);
-	if (new_c == HQ)
+	city new_c;
+	int ran_index = (rand() % (sr.route.size() - 1)) + 1;
+
+	if (sr.route[ran_index - 1] == HQ)
+		new_c = random_city(sr);
+	else
+		new_c = closest_profit_city(sr, sr.route[ran_index - 1]);
+
+	if (new_c == HQ || sr.route[ran_index] == HQ)
 		return sr;
 
-	int ran_index = (rand() % (sr.route.size() - 1)) + 1;
 	sr.route.insert(sr.route.begin() + ran_index, new_c);
 	sr.citys_visted.insert(new_c);
 
@@ -336,7 +374,7 @@ inline sales_route Genetic_Algo::add_city(sales_route sr) {
 }
 
 // Attemps to remove a city at random from the sales route
-inline sales_route Genetic_Algo::remove_city(sales_route sr) {
+inline sales_route Simulated_anneal::remove_city(sales_route sr) {
 	if (sr.citys_visted.size() < 2)
 		return sr;
 
@@ -375,7 +413,7 @@ inline sales_route Genetic_Algo::remove_city(sales_route sr) {
 }
 
 // Changes the amount passed to the function citys in the sales_route to other random citys
-inline sales_route Genetic_Algo::change_route(sales_route sr, int change_amount) {
+inline sales_route Simulated_anneal::change_route(sales_route sr, int change_amount) {
 	std::set<int> change_citys;
 	city new_c;
 	int tmp;
@@ -402,7 +440,12 @@ inline sales_route Genetic_Algo::change_route(sales_route sr, int change_amount)
 	for (it = change_citys.begin(); it != change_citys.end(); it++) {
 
 		while (true) {
-			new_c = random_city(sr);
+			// Checks if best of three random is possible
+			if (sr.route[(*it) - 1] == HQ) 
+				new_c = random_city(sr);
+			else
+				new_c = closest_profit_city(sr, sr.route[(*it) - 1]);
+
 			if (new_c != HQ) {
 				sr.route[*it] = new_c;
 				sr.citys_visted.insert(new_c);
@@ -416,34 +459,9 @@ inline sales_route Genetic_Algo::change_route(sales_route sr, int change_amount)
 	return sr;
 }
 
-bool Genetic_Algo::dup_check(sales_route sr) {
-	std::sort(sr.route.begin(), sr.route.end());
-
-	for (int i = 0; i < sr.route.size() - 1; i++) {
-		if (sr.route[i] == sr.route[i + 1] && sr.route[i] != HQ)
-			return true;
-	} 
-
-	return false;
-}
-
-bool Genetic_Algo::contains_check(sales_route sr) {
-
-	for (int i = 0; i < sr.route.size(); i++) {
-		if (sr.route[i] != HQ) {
-
-			std::unordered_set<city>::const_iterator got = sr.citys_visted.find (sr.route[i]);
-			if (got == sr.citys_visted.end())
-				return true;
-		}
-	}
-
-	return false;
-}
-
 int main() {
-	Genetic_Algo sa;
-	sa.anneal();
+	Simulated_anneal sa;
+	sa.run();
 
 	return 0;
 }
